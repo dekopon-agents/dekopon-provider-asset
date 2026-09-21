@@ -1,0 +1,11 @@
+/target/
+/dist/
+/asset-provider.wasm
+/asset-provider.wasm.sha256
+/.pi/
+*.wasm
+*.wasm.sha256
+*.tmp
+__pycache__/
+*.pyc
+.DS_Store
