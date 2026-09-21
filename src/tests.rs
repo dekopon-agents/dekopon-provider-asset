@@ -213,6 +213,29 @@ fn invalid_inputs_never_reach_imports() {
     }
 }
 #[test]
+fn non_object_inputs_are_refused_before_any_asset_call() {
+    let fake = Fake::new("text/plain", b"hello");
+    for capability in [LS, RM, SEND, CAT, ATTACH] {
+        for input in [
+            json!([]),
+            json!(["chat-asset:7"]),
+            json!(["text/plain", "hello"]),
+            json!(null),
+            json!(true),
+            json!(7),
+            json!("chat-asset:7"),
+        ] {
+            let error = operations::invoke(&fake, capability, input).unwrap_err();
+            assert_eq!(error.code(), "invalid-input");
+            assert!(
+                fake.calls.borrow().is_empty(),
+                "{capability} reached an import"
+            );
+        }
+    }
+}
+
+#[test]
 fn list_is_metadata_only_remove_and_send_are_distinct() {
     let fake = Fake::new("image/png", b"secret bytes");
     let listed = operations::invoke(&fake, LS, json!({})).unwrap();

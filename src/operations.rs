@@ -138,6 +138,10 @@ pub(crate) fn invoke<A: Assets>(
     capability: &str,
     input: Value,
 ) -> Result<Value, ProviderError> {
+    // Serde's struct deserializer also accepts positional arrays; closed schemas do not.
+    if matches!(capability, LS | RM | SEND | CAT | ATTACH) && !input.is_object() {
+        return Err(invalid("asset capability input must be an object"));
+    }
     let output = match capability {
         LS => {
             serde_json::from_value::<Empty>(input)
