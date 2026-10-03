@@ -2,7 +2,7 @@
 
 [package]
 name = "dekopon-asset-provider"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.98.1"
 license = "MIT OR Apache-2.0"
@@ -14,19 +14,16 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-dekopon-provider-sdk = { version = "=0.18.0", features = ["clap"] }
+clap = { version = "=4.6.6", features = ["derive"] }
+dekopon-provider-sdk = "=0.31.0"
+schemars = "=1.2.2"
 mime = "=0.3.17"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
-# `export_provider_with_cli!` needs this crate's own bindings for the `provider-cli` world. 0.62.0 is
-# the version the SDK generates its bindings with; two wit-bindgen runtimes in one component would
-# define `cabi_realloc` twice.
-wit-bindgen = { version = "=0.62.0", default-features = false, features = ["macros", "realloc"] }
 
 [dev-dependencies]
-dekopon-provider-sdk-testkit = "=0.18.0"
-# sdk-testkit 0.18.0 resolves through dekopon-broker-host 0.18.0, whose published
-# lower bound is Tokio 1.49.0. Pin that compatible minimum rather than silently floating it.
+dekopon-provider-sdk-testkit = "=0.31.0"
+dekopon-broker-host = "=0.31.0"
 tokio = { version = "=1.49.0", features = ["macros", "rt-multi-thread"] }
 
 [lints.rust]
