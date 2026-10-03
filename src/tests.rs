@@ -4,8 +4,8 @@ use crate::{
 };
 use dekopon_provider_sdk::{
     CommandRunOutcome, EffectKind,
-    asset::{AssetError, Encoding, Info},
-    provider,
+    asset::{AssetError, AssetErrorCode, Encoding, Info},
+    provider::{self, Failure},
 };
 use serde_json::json;
 use std::{
@@ -18,6 +18,7 @@ struct Fake {
     data: Vec<u8>,
     cursor: Cell<usize>,
     kind: String,
+    fail: Option<&'static str>,
 }
 impl Fake {
     fn new(kind: &str, data: &[u8]) -> Self {
@@ -26,10 +27,21 @@ impl Fake {
             data: data.to_vec(),
             cursor: Cell::new(0),
             kind: kind.into(),
+            fail: None,
         }
     }
     fn record(&self, name: &'static str) {
         self.calls.borrow_mut().push(name);
+    }
+    fn check(&self, name: &'static str) -> Result<(), AssetError> {
+        self.record(name);
+        if self.fail == Some(name) {
+            return Err(AssetError {
+                code: AssetErrorCode::Denied,
+                message: "fake host denial".into(),
+            });
+        }
+        Ok(())
     }
 }
 impl AssetAccess for Fake {
@@ -39,8 +51,9 @@ impl AssetAccess for Fake {
         self.record("list");
         vec![self.info(&false)]
     }
-    fn open(&self, _: &str) -> Result<bool, AssetError> {
-        self.record("open");
+    fn open(&self, reference: &str) -> Result<bool, AssetError> {
+        assert_eq!(reference, "chat-asset:7");
+        self.check("open")?;
         Ok(false)
     }
     fn info(&self, attached: &bool) -> Info {
@@ -55,7 +68,7 @@ impl AssetAccess for Fake {
         }
     }
     fn read(&self, _: &bool, buf: &mut [u8]) -> Result<usize, AssetError> {
-        self.record("read");
+        self.check("read")?;
         let start = self.cursor.get();
         let n = buf.len().min(997).min(self.data.len() - start);
         buf[..n].copy_from_slice(&self.data[start..start + n]);
@@ -63,24 +76,20 @@ impl AssetAccess for Fake {
         Ok(n)
     }
     fn remove(&self, _: &bool) -> Result<(), AssetError> {
-        self.record("remove");
-        Ok(())
+        self.check("remove")
     }
     fn send(&self, _: &bool) -> Result<(), AssetError> {
-        self.record("send");
-        Ok(())
+        self.check("send")
     }
     fn allocate(&self, _: &str, _: Encoding) -> Result<(), AssetError> {
-        self.record("allocate");
-        Ok(())
+        self.check("allocate")
     }
     fn write_all(&self, _: &(), bytes: &[u8]) -> Result<(), AssetError> {
         assert_eq!(bytes, self.data);
-        self.record("write");
-        Ok(())
+        self.check("write")
     }
     fn attach(&self, _: ()) -> Result<bool, AssetError> {
-        self.record("attach");
+        self.check("attach")?;
         Ok(true)
     }
 }
@@ -228,4 +237,127 @@ fn send_remove_and_cat_keep_distinct_effects_and_bounded_text() {
     let huge = Fake::new("text/plain", &vec![b'x'; MAX_TEXT_BYTES + 1]);
     assert!(operations::cat(&huge, source(), &mut Vec::new()).is_err());
     assert_eq!(huge.cursor.get(), MAX_TEXT_BYTES + 1);
+}
+
+#[test]
+fn malformed_references_and_mime_are_refused_before_imports() {
+    let fake = Fake::new("text/plain", b"hello");
+    let mut output = Vec::new();
+    for reference in [
+        "data:text/plain,hi",
+        "chat-asset:",
+        "chat-asset:07",
+        "chat-asset:+7",
+        "chat-asset:7\n",
+        "chat-asset:٧",
+        "chat-asset:18446744073709551616",
+    ] {
+        for call in [
+            operations::remove as fn(&Fake, Source, &mut Vec<u8>) -> _,
+            operations::send,
+            operations::cat,
+        ] {
+            let error = call(
+                &fake,
+                Source {
+                    source: reference.into(),
+                },
+                &mut output,
+            )
+            .unwrap_err();
+            assert_eq!(error.code().as_str(), "invalid-input");
+        }
+    }
+    for value in ["chat-asset:0", "chat-asset:18446744073709551615"] {
+        operations::validate_reference(value).unwrap();
+    }
+    for mime in ["image/*", "text/plain\r\nx:y", "", &"a".repeat(256)] {
+        let error = operations::attach_from(
+            &fake,
+            Attachment {
+                content_type: mime.into(),
+                stdin_piped: true,
+            },
+            Cursor::new(b"hello"),
+            &mut output,
+        )
+        .unwrap_err();
+        assert_eq!(error.code().as_str(), "invalid-input");
+        assert!(matches!(
+            provider::command::<AssetProvider>(&words(&["attach", "--type", mime]), true),
+            CommandRunOutcome::Failed { .. }
+        ));
+    }
+    assert!(fake.calls.borrow().is_empty());
+    assert!(output.is_empty());
+}
+
+#[test]
+fn listing_is_metadata_only_and_cat_checks_utf8_and_mime() {
+    let fake = Fake::new("image/png", b"private bytes");
+    let mut out = Vec::new();
+    operations::list(&fake, operations::Empty {}, &mut out).unwrap();
+    let listed: serde_json::Value = serde_json::from_slice(&out).unwrap();
+    assert_eq!(listed["assets"][0]["id"], 7);
+    assert_eq!(listed["assets"][0]["content_type"], "image/png");
+    assert!(!String::from_utf8(out).unwrap().contains("private bytes"));
+    assert_eq!(*fake.calls.borrow(), ["list"]);
+    for kind in [
+        "text/plain; charset=utf-8",
+        "application/json",
+        "application/problem+json",
+        "application/xml",
+        "application/atom+xml",
+        "application/javascript",
+    ] {
+        let fake = Fake::new(kind, "🦀\n".repeat(1000).as_bytes());
+        let mut out = Vec::new();
+        operations::cat(&fake, source(), &mut out).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&out).unwrap()["text"],
+            "🦀\n".repeat(1000)
+        );
+    }
+    let bad = Fake::new("text/plain", &[0xff]);
+    let mut out = Vec::new();
+    let error = operations::cat(&bad, source(), &mut out).unwrap_err();
+    assert_eq!(error.code().as_str(), "invalid-text");
+    assert!(out.is_empty());
+}
+
+#[test]
+fn host_failures_preserve_code_and_stop_later_effects() {
+    for (operation, failing, expected) in [
+        ("rm", "open", &["open"][..]),
+        ("rm", "remove", &["open", "remove"][..]),
+        ("send", "send", &["open", "send"][..]),
+        ("cat", "read", &["open", "read"][..]),
+        ("attach", "allocate", &["allocate"][..]),
+        ("attach", "write", &["allocate", "write"][..]),
+        ("attach", "attach", &["allocate", "write", "attach"][..]),
+    ] {
+        let mut fake = Fake::new("text/plain", b"hi");
+        fake.fail = Some(failing);
+        let mut out = Vec::new();
+        let error = match operation {
+            "rm" => operations::remove(&fake, source(), &mut out),
+            "send" => operations::send(&fake, source(), &mut out),
+            "cat" => operations::cat(&fake, source(), &mut out),
+            "attach" => operations::attach_from(
+                &fake,
+                Attachment {
+                    content_type: "text/plain".into(),
+                    stdin_piped: true,
+                },
+                Cursor::new(b"hi"),
+                &mut out,
+            ),
+            _ => unreachable!(),
+        }
+        .unwrap_err();
+        assert_eq!(error.code().as_str(), "denied");
+        assert_eq!(error.to_string(), "fake host denial");
+        assert_eq!(*fake.calls.borrow(), expected);
+        assert!(out.is_empty());
+    }
 }

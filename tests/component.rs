@@ -1,5 +1,6 @@
 use dekopon_asset_provider::AssetProvider;
-use dekopon_provider_sdk_testkit::{Harness, conformance};
+use dekopon_broker_host::BrokerHostError;
+use dekopon_provider_sdk_testkit::{Harness, HarnessError, conformance};
 use serde_json::json;
 use std::path::PathBuf;
 
@@ -19,9 +20,18 @@ fn real_component_conforms_and_refuses_ungranted_asset_effects()
             "asset.attach",
             json!({"content_type":"text/plain", "stdin_piped":true}),
         );
+    let HarnessError::Invocation(failure) = rejected.expect_err("no asset grant") else {
+        panic!("expected invocation failure from broker host");
+    };
     assert!(
-        rejected.is_err(),
-        "asset authority cannot be supplied by a proposal alone"
+        matches!(
+            failure.error.as_ref(),
+            BrokerHostError::HostCallRejected {
+                reason: "asset-call-rejected",
+                ..
+            }
+        ),
+        "unexpected refusal: {failure:?}"
     );
     Ok(())
 }
