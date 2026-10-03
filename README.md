@@ -1,6 +1,6 @@
 # dekopon-provider-asset
 
-Dekopon conversation assets, SDK **0.18.0**, provider **0.1.0**. Command word: `asset`.
+Dekopon conversation assets, provider **0.1.0** (SDK prepublication git revision). Command word: `asset`.
 Assets stay in broker-owned handles, not data URLs or byte envelopes. No paths, HTTP, storage,
 WASI, subprocesses or environment access. `run-command` only proposes; `invoke` calls the host.
 
@@ -23,8 +23,9 @@ printf 'hello\n' | asset attach --type text/plain
 `N` is a canonical unsigned 64-bit decimal number. Reference commands propose exactly
 `{"source":"chat-asset:7"}` so the gateway discovers a string leaf and passes its descriptor.
 Listing metadata does not grant access to an unreferenced asset. Direct invokes enforce closed
-schemas independently of the manifest. `ls` takes `{}`; `attach` takes
-`{"content_type":"text/plain","text":"hello\n"}`. Piped input is required for attach (empty text
+schemas independently of the manifest. `ls` takes `{}`; `attach` proposes
+`{"content_type":"text/plain","stdin_piped":true}` and reads the bytes only at invocation.
+Piped input is required for attach (empty text
 is allowed); other commands ignore stdin. Attach accepts any concrete MIME label, not wildcards,
 up to 255 ASCII bytes with no control bytes. The label is not content sniffing or conversion.
 
@@ -44,8 +45,8 @@ up to 255 ASCII bytes with no control bytes. The label is not content sniffing o
   **131072 UTF-8 stdin bytes**; identity storage via allocate → write_all → attach. No automatic
   send, no `attachments` envelope. The gateway appends the numbered asset note.
 
-The actual SDK success envelope is checked against **1,000,000 serialized bytes**, below its
-1 MiB default host bound, including JSON escaping. Lower deployment bounds may still refuse.
+Each JSON stdout receipt is checked against **1,000,000 serialized bytes** including JSON
+escaping and its newline. Lower deployment bounds may still refuse.
 SDK errors retain their stable code and bounded message in the provider. The broker may instead
 report its sticky `asset-call-rejected` refusal; missing descriptors are refused before invoke.
 Nothing retries on failure.
@@ -105,9 +106,8 @@ DEKOPON_PROVIDER_COMPONENT="$PWD/asset-provider.wasm" cargo test --locked
 ```
 
 For a worktree, use the absolute path to `provider-workflows/build.sh`.
-Native tests inject a private asset seam and cover all operations, boundaries and failures.
+Native tests inject a private asset seam and cover bounded stdin, operations and effects.
 The component test requires `DEKOPON_PROVIDER_COMPONENT` and fails if unset; it exercises real
-pure command proposals, metadata listing and host-level refusals. SDK testkit 0.18.0 has no asset
-transport builder, so successful descriptor/effect paths are native fake tests, not claimed as
-end-to-end gateway delivery tests. Shared CI also checks WIT mirrors, Dekopon-only imports and
+real typed conformance and host-level refusal. Successful descriptor/effect paths are native
+fake tests, not claimed as end-to-end gateway delivery tests. Shared CI checks imports and
 reproducibility. Release tags publish `ghcr.io/dekopon-agents/provider-asset:0.1.0`.

@@ -1,66 +1,56 @@
-use crate::{ATTACH, CAT, LS, RM, SEND, operations};
-use dekopon_provider_sdk::{
-    CommandInvocation, CommandRun, ProviderError,
-    clap::{Arg, Command},
-    cli,
-};
-use serde_json::json;
+use crate::{AssetProvider, Attach, Cat, List, Remove, Send, operations};
+use clap::{Parser, Subcommand};
+use dekopon_provider_sdk::provider::{Proposal, Usage};
 
-pub(crate) fn run(argv: &[String], stdin: Option<&str>) -> Result<CommandRun, ProviderError> {
-    let mut tree = Command::new("asset")
-        .version(env!("CARGO_PKG_VERSION"))
-        .about("Manage conversation assets; attaching does not send")
-        .subcommand_required(true)
-        .subcommand(Command::new("ls").about("List conversation asset metadata"));
-    for (name, about) in [
-        ("rm", "Remove an unsent asset"),
-        ("send", "Queue an asset for this turn's reply"),
-        ("cat", "Read bounded UTF-8 text from an asset"),
-    ] {
-        tree = tree.subcommand(
-            Command::new(name)
-                .about(about)
-                .arg(Arg::new("N").required(true)),
-        );
+#[derive(Parser)]
+#[command(
+    name = "asset",
+    version,
+    about = "Manage conversation assets; attaching does not send"
+)]
+pub struct Args {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+pub enum Command {
+    /// List conversation asset metadata.
+    Ls,
+    /// Remove an unsent asset.
+    Rm { n: String },
+    /// Queue an asset for this turn's reply.
+    Send { n: String },
+    /// Read bounded UTF-8 text from an asset.
+    Cat { n: String },
+    /// Attach piped text without sending it.
+    Attach {
+        #[arg(long = "type")]
+        content_type: String,
+    },
+}
+
+pub fn propose(args: Args, stdin_piped: bool) -> Result<Proposal<AssetProvider>, Usage> {
+    match args.command {
+        Command::Ls => Ok(Proposal::to::<List>(operations::Empty {})),
+        Command::Rm { n } => Ok(Proposal::to::<Remove>(source(&n)?)),
+        Command::Send { n } => Ok(Proposal::to::<Send>(source(&n)?)),
+        Command::Cat { n } => Ok(Proposal::to::<Cat>(source(&n)?)),
+        Command::Attach { content_type } => {
+            operations::validate_type(&content_type).map_err(|e| Usage::new(e.to_string()))?;
+            if !stdin_piped {
+                return Err(Usage::new("asset attach requires piped UTF-8 text"));
+            }
+            Ok(Proposal::to::<Attach>(operations::Attachment {
+                content_type,
+                stdin_piped,
+            }))
+        }
     }
-    tree = tree.subcommand(
-        Command::new("attach")
-            .about("Attach piped text without sending it")
-            .arg(
-                Arg::new("type")
-                    .long("type")
-                    .required(true)
-                    .value_name("MIME"),
-            ),
-    );
-    cli::run_command(tree, argv, stdin, |matches, stdin| {
-        let (capability, input) = match matches.subcommand() {
-            Some(("ls", _)) => (LS, json!({})),
-            Some((name @ ("rm" | "send" | "cat"), args)) => {
-                let number = args.get_one::<String>("N").expect("required number");
-                // Store the whole reference as a string leaf: the gateway pins it before invoke.
-                let reference = format!("chat-asset:{number}");
-                operations::validate_reference(&reference)?;
-                let capability = match name {
-                    "rm" => RM,
-                    "send" => SEND,
-                    _ => CAT,
-                };
-                (capability, json!({"source": reference}))
-            }
-            Some(("attach", args)) => {
-                let content_type = args.get_one::<String>("type").expect("required type");
-                let text = stdin
-                    .ok_or_else(|| crate::invalid("asset attach requires piped UTF-8 text"))?;
-                operations::validate_attach(content_type, text)?;
-                (ATTACH, json!({"content_type": content_type, "text": text}))
-            }
-            _ => unreachable!("clap requires one known subcommand"),
-        };
-        Ok(CommandInvocation {
-            capability: capability.parse().expect("static capability"),
-            input,
-            secret_use: None,
-        })
-    })
+}
+
+fn source(number: &str) -> Result<operations::Source, Usage> {
+    let source = format!("chat-asset:{number}");
+    operations::validate_reference(&source).map_err(|e| Usage::new(e.to_string()))?;
+    Ok(operations::Source { source })
 }
