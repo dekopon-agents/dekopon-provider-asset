@@ -18,6 +18,7 @@ struct Fake {
     data: Vec<u8>,
     cursor: Cell<usize>,
     kind: String,
+    stored: Option<u64>,
     fail: Option<&'static str>,
 }
 impl Fake {
@@ -27,6 +28,7 @@ impl Fake {
             data: data.to_vec(),
             cursor: Cell::new(0),
             kind: kind.into(),
+            stored: Some(data.len() as u64),
             fail: None,
         }
     }
@@ -61,7 +63,7 @@ impl AssetAccess for Fake {
             id: if *attached { None } else { Some(7) },
             content_type: self.kind.clone(),
             encoding: Encoding::Identity,
-            stored_bytes: Some(self.data.len() as u64),
+            stored_bytes: self.stored,
             seekable: true,
             origin: "chat".into(),
             sent: false,
@@ -234,8 +236,27 @@ fn send_remove_and_cat_keep_distinct_effects_and_bounded_text() {
     assert!(operations::cat(&bad, source(), &mut out).is_err());
     assert!(out.is_empty());
     assert_eq!(*bad.calls.borrow(), ["open"]);
-    let huge = Fake::new("text/plain", &vec![b'x'; MAX_TEXT_BYTES + 1]);
-    assert!(operations::cat(&huge, source(), &mut Vec::new()).is_err());
+    for stored in [None, Some(u64::MAX), Some(0)] {
+        let mut largest = Fake::new("text/plain", &vec![b'x'; MAX_TEXT_BYTES]);
+        largest.stored = stored;
+        let mut out = Vec::new();
+        operations::cat(&largest, source(), &mut out).unwrap();
+        assert_eq!(largest.cursor.get(), MAX_TEXT_BYTES);
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&out).unwrap()["text"]
+                .as_str()
+                .unwrap()
+                .len(),
+            MAX_TEXT_BYTES
+        );
+        assert!(out.len() < crate::MAX_ENVELOPE_BYTES);
+    }
+    let mut huge = Fake::new("text/plain", &vec![b'x'; MAX_TEXT_BYTES + 1]);
+    huge.stored = Some(0);
+    let mut out = Vec::new();
+    let error = operations::cat(&huge, source(), &mut out).unwrap_err();
+    assert_eq!(error.code().as_str(), "too-large");
+    assert!(out.is_empty());
     assert_eq!(huge.cursor.get(), MAX_TEXT_BYTES + 1);
 }
 
