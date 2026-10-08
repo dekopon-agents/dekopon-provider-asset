@@ -1,6 +1,6 @@
 # dekopon-provider-asset
 
-Dekopon conversation assets, provider **0.2.0** (Dekopon SDK 0.31.0 from crates.io). Command word: `asset`.
+Dekopon conversation assets, provider **0.2.1** (Dekopon SDK 0.36.0 from crates.io). Command word: `asset`.
 Assets stay in broker-owned handles, not data URLs or byte envelopes. No paths, HTTP, storage,
 WASI, subprocesses or environment access. `run-command` only proposes; `invoke` calls the host.
 
@@ -110,4 +110,4 @@ Native tests inject a private asset seam and cover bounded stdin, operations and
 The component test requires `DEKOPON_PROVIDER_COMPONENT` and fails if unset; it exercises real
 real typed conformance and host-level refusal. Successful descriptor/effect paths are native
 fake tests, not claimed as end-to-end gateway delivery tests. Shared CI checks imports and
-reproducibility. Release tags publish `ghcr.io/dekopon-agents/provider-asset:0.2.0`.
+reproducibility. Release tags publish `ghcr.io/dekopon-agents/provider-asset:0.2.1`.
