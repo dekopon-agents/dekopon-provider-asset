@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-08
+
+- Pin the asset provider SDK, testkit, broker host and carried Dekopon dependencies to 0.36.0; preserve the asset command and WIT contracts.
+
 ## [0.2.0] - 2026-10-03
 
 - Migrate asset commands to the typed Dekopon 0.31.0 SDK and stdio streams.
