@@ -107,7 +107,6 @@ fn words(parts: &[&str]) -> Vec<String> {
 fn typed_manifest_and_proposals_preserve_authority() {
     let m = provider::manifest::<AssetProvider>().unwrap();
     assert_eq!(m.id.as_str(), "asset");
-    // Captured from provider::manifest at main 04ff873 (v0.2.1).
     let baseline: serde_json::Value =
         serde_json::from_str(include_str!("../tests/fixtures/capabilities.json")).unwrap();
     assert_eq!(serde_json::to_value(&m.capabilities).unwrap(), baseline);
@@ -161,7 +160,6 @@ fn typed_manifest_and_proposals_preserve_authority() {
         CommandRunOutcome::Failed { .. }
     ));
 }
-// Decode the actual command proposal into the same input passed to the operation seam.
 fn reference_proposes_and_opens_as_written(command: &str, effect: &str) {
     let CommandRunOutcome::Proposed {
         capability,
@@ -175,7 +173,6 @@ fn reference_proposes_and_opens_as_written(command: &str, effect: &str) {
     assert_eq!(input, json!({"source":"chat-asset:7"}));
     assert!(secret_use.is_none());
     let source: Source = serde_json::from_value(input).unwrap();
-    // Empty text needs one EOF read; rm/send each perform their single mutation.
     let fake = Fake::new("text/plain", b"");
     let mut output = Vec::new();
     match command {
@@ -185,7 +182,6 @@ fn reference_proposes_and_opens_as_written(command: &str, effect: &str) {
         _ => unreachable!(),
     }
     .unwrap();
-    // Fake::open asserts the exact string; this also proves it was called once.
     assert_eq!(*fake.calls.borrow(), ["open", effect]);
 }
 

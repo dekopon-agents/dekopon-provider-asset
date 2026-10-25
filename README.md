@@ -114,7 +114,8 @@ For a worktree, use the absolute path to `provider-workflows/build.sh`.
 Native tests inject a private asset seam and cover bounded stdin, operations and effects.
 The component test requires `DEKOPON_PROVIDER_COMPONENT` and fails if unset; it exercises
 typed conformance, command proposals for `cat`/`send`/`rm`, and host-level refusal.
-Successful descriptor/effect paths are native fake tests, not claimed as end-to-end gateway delivery tests. Testkit 0.36's `Harness` grants
+Successful descriptor/effect paths are native fake tests, not claimed as end-to-end gateway
+delivery tests. Testkit 0.36's `Harness` grants
 no asset constraint and supplies no asset rows or descriptors, so successful real-component
 `cat`/`send`/`rm` descriptor invocation is not covered. Shared CI checks imports and
 reproducibility. Release tags publish `ghcr.io/dekopon-agents/provider-asset:0.3.0`.
