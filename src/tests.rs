@@ -107,6 +107,11 @@ fn words(parts: &[&str]) -> Vec<String> {
 fn typed_manifest_and_proposals_preserve_authority() {
     let m = provider::manifest::<AssetProvider>().unwrap();
     assert_eq!(m.id.as_str(), "asset");
+    // Captured from provider::manifest at main 04ff873 (v0.2.1).
+    let baseline: serde_json::Value =
+        serde_json::from_str(include_str!("../tests/fixtures/capabilities.json")).unwrap();
+    assert_eq!(serde_json::to_value(&m.capabilities).unwrap(), baseline);
+    assert_eq!(m.capabilities.len(), 5);
     for (cap, name, effect) in m
         .capabilities
         .iter()
@@ -133,24 +138,6 @@ fn typed_manifest_and_proposals_preserve_authority() {
     for (cmd, piped, cap, input) in [
         (vec!["ls"], false, "asset.ls", json!({})),
         (
-            vec!["rm", "7"],
-            false,
-            "asset.rm",
-            json!({"source":"chat-asset:7"}),
-        ),
-        (
-            vec!["send", "7"],
-            false,
-            "asset.send",
-            json!({"source":"chat-asset:7"}),
-        ),
-        (
-            vec!["cat", "7"],
-            false,
-            "asset.cat",
-            json!({"source":"chat-asset:7"}),
-        ),
-        (
             vec!["attach", "--type", "text/plain"],
             true,
             "asset.attach",
@@ -174,6 +161,70 @@ fn typed_manifest_and_proposals_preserve_authority() {
         CommandRunOutcome::Failed { .. }
     ));
 }
+// Decode the actual command proposal into the same input passed to the operation seam.
+fn reference_proposes_and_opens_as_written(command: &str, effect: &str) {
+    let CommandRunOutcome::Proposed {
+        capability,
+        input,
+        secret_use,
+    } = provider::command::<AssetProvider>(&words(&[command, "chat-asset:7"]), false)
+    else {
+        panic!("expected reference proposal for {command}");
+    };
+    assert_eq!(capability.as_str(), format!("asset.{command}"));
+    assert_eq!(input, json!({"source":"chat-asset:7"}));
+    assert!(secret_use.is_none());
+    let source: Source = serde_json::from_value(input).unwrap();
+    // Empty text needs one EOF read; rm/send each perform their single mutation.
+    let fake = Fake::new("text/plain", b"");
+    let mut output = Vec::new();
+    match command {
+        "cat" => operations::cat(&fake, source, &mut output),
+        "send" => operations::send(&fake, source, &mut output),
+        "rm" => operations::remove(&fake, source, &mut output),
+        _ => unreachable!(),
+    }
+    .unwrap();
+    // Fake::open asserts the exact string; this also proves it was called once.
+    assert_eq!(*fake.calls.borrow(), ["open", effect]);
+}
+
+fn invalid_arguments_fail_without_proposal(command: &str) {
+    for argument in ["7", "chat-asset:07", "chat-asset:", "data:text/plain,hi"] {
+        let outcome = provider::command::<AssetProvider>(&words(&[command, argument]), false);
+        let CommandRunOutcome::Failed { error } = outcome else {
+            panic!("{command} {argument} must fail before proposal: {outcome:?}");
+        };
+        assert_eq!(error.code, "usage");
+        assert!(error.message.contains("chat-asset:N"));
+    }
+}
+
+#[test]
+fn cat_proposes_and_opens_reference_as_written() {
+    reference_proposes_and_opens_as_written("cat", "read");
+}
+#[test]
+fn send_proposes_and_opens_reference_as_written() {
+    reference_proposes_and_opens_as_written("send", "send");
+}
+#[test]
+fn rm_proposes_and_opens_reference_as_written() {
+    reference_proposes_and_opens_as_written("rm", "remove");
+}
+#[test]
+fn cat_invalid_arguments_fail_without_proposal() {
+    invalid_arguments_fail_without_proposal("cat");
+}
+#[test]
+fn send_invalid_arguments_fail_without_proposal() {
+    invalid_arguments_fail_without_proposal("send");
+}
+#[test]
+fn rm_invalid_arguments_fail_without_proposal() {
+    invalid_arguments_fail_without_proposal("rm");
+}
+
 #[test]
 fn attach_refuses_invalid_utf8_and_overlong_before_effects() {
     for data in [vec![0xff], vec![b'x'; MAX_TEXT_BYTES + 1]] {

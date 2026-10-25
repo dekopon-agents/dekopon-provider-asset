@@ -1,5 +1,7 @@
 use dekopon_asset_provider::AssetProvider;
-use dekopon_broker_host::BrokerHostError;
+use dekopon_broker_host::{
+    BrokerHostError, BrokerHostLimits, BrokerProviderRegistry, CommandRunOutcome,
+};
 use dekopon_provider_sdk_testkit::{Harness, HarnessError, conformance};
 use serde_json::json;
 use std::path::PathBuf;
@@ -33,5 +35,27 @@ fn real_component_conforms_and_refuses_ungranted_asset_effects()
         ),
         "unexpected refusal: {failure:?}"
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn real_component_proposes_references_as_written() -> Result<(), Box<dyn std::error::Error>> {
+    let registry = BrokerProviderRegistry::load([component()], BrokerHostLimits::default()).await?;
+    for command in ["cat", "send", "rm"] {
+        let outcome = registry
+            .run_command("asset", &[command.into(), "chat-asset:7".into()], false)
+            .await?;
+        let CommandRunOutcome::Proposed {
+            capability,
+            input,
+            secret_use,
+        } = outcome
+        else {
+            panic!("expected reference proposal for {command}: {outcome:?}");
+        };
+        assert_eq!(capability.as_str(), format!("asset.{command}"));
+        assert_eq!(input, json!({"source":"chat-asset:7"}));
+        assert!(secret_use.is_none());
+    }
     Ok(())
 }

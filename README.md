@@ -6,22 +6,27 @@ WASI, subprocesses or environment access. `run-command` only proposes; `invoke` 
 
 ```sh
 asset ls
-asset cat 7
-asset rm 7
-asset send 7
+asset cat chat-asset:7
+asset rm chat-asset:7
+asset send chat-asset:7
 printf 'hello\n' | asset attach --type text/plain
 ```
 
 | Command | Capability | Effect / risk | Asset constraint |
 |---|---|---|---|
 | `ls` | `asset.ls` | read-only / low | none |
-| `cat <N>` | `asset.cat` | read-only / low | none |
-| `rm <N>` | `asset.rm` | local-write / low | `remove: true` |
-| `send <N>` | `asset.send` | external-write / medium | `send: true` |
+| `cat chat-asset:N` | `asset.cat` | read-only / low | none |
+| `rm chat-asset:N` | `asset.rm` | local-write / low | `remove: true` |
+| `send chat-asset:N` | `asset.send` | external-write / medium | `send: true` |
 | `attach --type <mime>` | `asset.attach` | local-write / low | `attach: true` |
 
-`N` is a canonical unsigned 64-bit decimal number. Reference commands propose exactly
-`{"source":"chat-asset:7"}` so the gateway discovers a string leaf and passes its descriptor.
+Pass `chat-asset:N` as its own unquoted word; `N` is a canonical unsigned 64-bit decimal
+number. Bare numbers are usage errors. Reference commands validate the argument and propose
+it unchanged: `asset cat chat-asset:7` proposes exactly `{"source":"chat-asset:7"}`.
+On today's core the gateway discovers this string leaf and passes its descriptor. On the
+asset-lifetime core the broker substitutes the typed reference before `run-command`, giving
+the provider the same argument. The provider does not infer whether the word was quoted;
+the host's `open` decides whether the frame carried the reference.
 Listing metadata does not grant access to an unreferenced asset. Direct invokes enforce closed
 schemas independently of the manifest. `ls` takes `{}`; `attach` proposes
 `{"content_type":"text/plain","stdin_piped":true}` and reads the bytes only at invocation.
@@ -107,7 +112,9 @@ DEKOPON_PROVIDER_COMPONENT="$PWD/asset-provider.wasm" cargo test --locked
 
 For a worktree, use the absolute path to `provider-workflows/build.sh`.
 Native tests inject a private asset seam and cover bounded stdin, operations and effects.
-The component test requires `DEKOPON_PROVIDER_COMPONENT` and fails if unset; it exercises real
-real typed conformance and host-level refusal. Successful descriptor/effect paths are native
-fake tests, not claimed as end-to-end gateway delivery tests. Shared CI checks imports and
+The component test requires `DEKOPON_PROVIDER_COMPONENT` and fails if unset; it exercises
+typed conformance, command proposals for `cat`/`send`/`rm`, and host-level refusal.
+Successful descriptor/effect paths are native fake tests, not claimed as end-to-end gateway delivery tests. Testkit 0.36's `Harness` grants
+no asset constraint and supplies no asset rows or descriptors, so successful real-component
+`cat`/`send`/`rm` descriptor invocation is not covered. Shared CI checks imports and
 reproducibility. Release tags publish `ghcr.io/dekopon-agents/provider-asset:0.2.1`.
