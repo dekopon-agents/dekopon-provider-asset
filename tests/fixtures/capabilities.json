@@ -1,0 +1,93 @@
+[
+  {
+    "id": "asset.ls",
+    "description": "List metadata, not permission to open assets",
+    "effect": "read-only",
+    "risk": "Low",
+    "inputSchema": {
+      "additionalProperties": false,
+      "type": "object"
+    }
+  },
+  {
+    "id": "asset.rm",
+    "description": "Remove an unsent asset (requires asset.remove)",
+    "effect": "local-write",
+    "risk": "Low",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "pattern": "^chat-asset:(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "id": "asset.send",
+    "description": "Queue delivery on this turn's reply (requires asset.send)",
+    "effect": "external-write",
+    "risk": "Medium",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "pattern": "^chat-asset:(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "id": "asset.cat",
+    "description": "Read at most 131072 decoded bytes of UTF-8 text; binary refused",
+    "effect": "read-only",
+    "risk": "Low",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "pattern": "^chat-asset:(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "id": "asset.attach",
+    "description": "Attach stdin text without sending it (requires asset.attach)",
+    "effect": "local-write",
+    "risk": "Low",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "content_type": {
+          "maxLength": 255,
+          "type": "string"
+        },
+        "stdin_piped": {
+          "description": "Piped input is read only after the broker authorizes this proposal.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "content_type",
+        "stdin_piped"
+      ],
+      "type": "object"
+    }
+  }
+]
