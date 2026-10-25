@@ -1,6 +1,6 @@
 # dekopon-provider-asset
 
-Dekopon conversation assets, provider **0.2.1** (Dekopon SDK 0.36.0 from crates.io). Command word: `asset`.
+Dekopon conversation assets, provider **0.3.0** (Dekopon SDK 0.36.0 from crates.io). Command word: `asset`.
 Assets stay in broker-owned handles, not data URLs or byte envelopes. No paths, HTTP, storage,
 WASI, subprocesses or environment access. `run-command` only proposes; `invoke` calls the host.
 
@@ -117,4 +117,4 @@ typed conformance, command proposals for `cat`/`send`/`rm`, and host-level refus
 Successful descriptor/effect paths are native fake tests, not claimed as end-to-end gateway delivery tests. Testkit 0.36's `Harness` grants
 no asset constraint and supplies no asset rows or descriptors, so successful real-component
 `cat`/`send`/`rm` descriptor invocation is not covered. Shared CI checks imports and
-reproducibility. Release tags publish `ghcr.io/dekopon-agents/provider-asset:0.2.1`.
+reproducibility. Release tags publish `ghcr.io/dekopon-agents/provider-asset:0.3.0`.

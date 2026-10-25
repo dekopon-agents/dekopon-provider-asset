@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-25
+
+- Take `chat-asset:N` references as written for `cat`, `send`, and `rm`; refuse bare numbers with a usage error. Keep `ls`, capabilities, schemas, WIT, and SDK pins unchanged.
+
 ## [0.2.1] - 2026-10-08
 
 - Pin the asset provider SDK, testkit, broker host and carried Dekopon dependencies to 0.36.0; preserve the asset command and WIT contracts.
